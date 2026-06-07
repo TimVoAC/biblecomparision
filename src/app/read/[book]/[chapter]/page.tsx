@@ -89,8 +89,8 @@ export default async function ReadPage({ params }: PageProps) {
                   </div>
 
                   {/* English translation block */}
-                  <div style={{ backgroundColor: 'white', padding: '20px' }}>
-                    <h4 style={{ margin: '0 0 10px 0', fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                  <div style={{ backgroundColor: '#dceaf8', padding: '20px' }}>
+                    <h4 style={{ margin: '0 0 10px 0', fontSize: '0.75rem', color: '#f073f0', textTransform: 'uppercase', fontWeight: 'bold' }}>
                       English (NIV)
                     </h4>
                     <p style={{ margin: '0', color: '#334155', fontSize: '1rem', lineHeight: '1.6' }} dangerouslySetInnerHTML={{ __html: enText }} />

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { fetchStrongDefinition, type StrongDefinition } from "@/lib/bibleApi";
+import type { StrongDefinition } from "@/lib/bibleApi";
 
 interface VerseTextProps {
   text: string;
@@ -12,6 +12,8 @@ interface VerseTextProps {
 interface ParsedWord {
   displayWord: string;
   lookupKey: string;
+  strongId?: string;
+  language: "G" | "H";
 }
 
 export default function VerseText({ text, isRtl = false, style }: VerseTextProps) {
@@ -20,6 +22,7 @@ export default function VerseText({ text, isRtl = false, style }: VerseTextProps
   const [definition, setDefinition] = useState<StrongDefinition | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const lookupLanguage: "G" | "H" = isRtl ? "H" : "G";
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -38,7 +41,27 @@ export default function VerseText({ text, isRtl = false, style }: VerseTextProps
   const getWords = (rawText: string): ParsedWord[] => {
     if (!rawText || rawText === "—") return [];
     
-    // Strip HTML boilerplate elements safely
+    const wordsWithStrongIds: ParsedWord[] = [];
+    const appndRegex = /<appnd\b[^>]*\bstrong=["']([GH]0*\d+)["'][^>]*>([\s\S]*?)<\/appnd>/gi;
+    let match: RegExpExecArray | null;
+
+    while ((match = appndRegex.exec(rawText)) !== null) {
+      const displayWord = match[2].replace(/<\/?[^>]+(>|$)/g, "").trim();
+      if (displayWord) {
+        wordsWithStrongIds.push({
+          displayWord,
+          lookupKey: match[1].toUpperCase(),
+          strongId: match[1].toUpperCase(),
+          language: match[1].toUpperCase().startsWith("H") ? "H" : "G",
+        });
+      }
+    }
+
+    if (wordsWithStrongIds.length > 0) {
+      return wordsWithStrongIds;
+    }
+
+    // Strip HTML boilerplate elements safely when no Strong markup is available.
     const plainText = rawText.replace(/<\/?[^>]+(>|$)/g, "");
     
     return plainText.split(/\s+/).map(token => {
@@ -49,7 +72,8 @@ export default function VerseText({ text, isRtl = false, style }: VerseTextProps
         
       return {
         displayWord: token,
-        lookupKey: cleanWord || token
+        lookupKey: cleanWord || token,
+        language: lookupLanguage,
       };
     }).filter(w => w.lookupKey.length > 0);
   };
@@ -66,9 +90,16 @@ export default function VerseText({ text, isRtl = false, style }: VerseTextProps
     setLoading(true);
     setDefinition(null);
 
-    // Run the lookup function, explicitly indicating language direction boundaries
-    const data = await fetchStrongDefinition(wordObj.lookupKey, isRtl);
-    setDefinition(data);
+    try {
+      const url = wordObj.strongId
+        ? `/api/strong/${encodeURIComponent(wordObj.strongId)}`
+        : `/api/strong/lookup?word=${encodeURIComponent(wordObj.lookupKey)}&lang=${wordObj.language}`;
+      const res = await fetch(url);
+      setDefinition(res.ok ? await res.json() : null);
+    } catch (error) {
+      console.error(`Lexicon lookup failed for ${wordObj.lookupKey}:`, error);
+      setDefinition(null);
+    }
     setLoading(false);
   };
 
@@ -116,6 +147,8 @@ export default function VerseText({ text, isRtl = false, style }: VerseTextProps
             padding: "16px",
             zIndex: 9999,
             maxWidth: "320px",
+            maxHeight: "420px",
+            overflowY: "auto",
             fontFamily: "sans-serif",
             fontSize: "0.9rem",
             direction: "ltr",
@@ -123,7 +156,7 @@ export default function VerseText({ text, isRtl = false, style }: VerseTextProps
         >
           <div style={{ borderBottom: "1px solid #e2e8f0", paddingBottom: "8px", marginBottom: "8px" }}>
             <span style={{ fontWeight: "bold", color: "#1e3a8a" }}>
-              Lexicon Definition
+              English Definition
             </span>
           </div>
 
@@ -140,6 +173,9 @@ export default function VerseText({ text, isRtl = false, style }: VerseTextProps
               <div>
                 <strong style={{ color: "#0f172a" }}>Term:</strong> {definition.word}
               </div>
+              <div>
+                <strong style={{ color: "#0f172a" }}>Strong:</strong> {definition.topic}
+              </div>
               {definition.transliteration && (
                 <div>
                   <strong style={{ color: "#0f172a" }}>Transliteration:</strong> <i>{definition.transliteration}</i>
@@ -149,6 +185,11 @@ export default function VerseText({ text, isRtl = false, style }: VerseTextProps
                 <strong style={{ color: "#0f172a", display: "block", marginBottom: "2px" }}>Meaning:</strong>
                 <span dangerouslySetInnerHTML={{ __html: definition.definition }} />
               </div>
+              {definition.source && (
+                <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "4px" }}>
+                  Source: {definition.source}
+                </div>
+              )}
             </div>
           )}
         </div>
